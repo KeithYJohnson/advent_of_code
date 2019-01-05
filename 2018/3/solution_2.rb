@@ -1,12 +1,19 @@
 require 'pry'
-def solution_2(input)
-  matrix = Array.new(2_000) { Array.new(2_000) { 0 } }
+require 'set'
+
+def solution(
+    input,
+    matrix_contructor=method(:create_square_matrix_of_zeros),
+    index_strategy=method(:count_claims_by_coord),
+    output_counter=method(:count_overlaps)
+)
+  matrix = matrix_contructor.call
   input.each do |line|
     p "input line: #{line}"
-    x_start, y_start, width, height = get_dims(line)
-    p "calling apply_cloth(#{x_start}, #{y_start}, #{width}, #{height})"
+    id, x_start, y_start, width, height = get_dims(line)
+    p "calling index index_strategy with (#{x_start}, #{y_start}, #{width}, #{height}, #{id})"
     # matrix = resize_matrix(matrix, x_start, y_start, width, height)
-    matrix = apply_cloth(matrix, x_start, y_start, width, height)
+    matrix = index_strategy.call(matrix, x_start, y_start, width, height, id)
   end
   p "matrix dims: #{matrix.length}x#{matrix.first.length}"
 
@@ -18,8 +25,16 @@ def solution_2(input)
   0 0 0 0
   0 0 0 0
 =end
+  p "calling output_counter: #{output_counter}"
+  output_counter.call(matrix)
+end
 
-  count_overlaps(matrix)
+def create_square_matrix_of_zeros(num_dims=2_000)
+  Array.new(num_dims) { Array.new(num_dims) { 0 } }
+end
+
+def create_square_matrix_of_empty_arrays(num_dims=2_000)
+  Array.new(num_dims) { Array.new(num_dims) { [] } }
 end
 
 def count_overlaps(matrix)
@@ -33,13 +48,42 @@ def count_overlaps(matrix)
   counter
 end
 
-def apply_cloth(matrix, x_start, y_start, width, height)
-  y_start.upto(y_start + height - 1) do |col_idx|
-    x_start.upto(x_start + width - 1) do |row_idx|
-      matrix[col_idx][row_idx] += 1
+def count_num_ids_with_no_overlap(matrix)
+  all_ids      = Set.new
+  with_overlap = Set.new
+
+  matrix.each_with_index do |row, row_idx|
+    p "row_idx: #{row_idx}"
+    p "all_ids.length: #{all_ids.length}"
+    p "with_overlap.length: #{with_overlap.length}"
+    row.each do |item|
+      as_set = item.to_set
+      all_ids = all_ids | as_set
+      with_overlap = with_overlap | as_set if item.length > 1
     end
   end
-  matrix
+  p all_ids.difference(with_overlap).inspect
+  all_ids.difference(with_overlap).length
+end
+
+def count_claims_by_coord(matrix, x_start, y_start, width, height, id)
+  matrix.tap do |matrix|
+    y_start.upto(y_start + height - 1) do |col_idx|
+      x_start.upto(x_start + width - 1) do |row_idx|
+        matrix[col_idx][row_idx] += 1
+      end
+    end
+  end
+end
+
+def track_claim_ids_by_coord(matrix, x_start, y_start, width, height, id)
+  matrix.tap do |matrix|
+    y_start.upto(y_start + height - 1) do |col_idx|
+      x_start.upto(x_start + width - 1) do |row_idx|
+        matrix[col_idx][row_idx] << id
+      end
+    end
+  end
 end
 
 def get_dims(line)
@@ -50,6 +94,8 @@ def get_dims(line)
   at_symbol_idx = line.index("@")
   colon_idx = line.index(":")
 
+  id = line[1...(at_symbol_idx - 1)].to_i
+
   left = line[(at_symbol_idx + 2)...left_top_delim_idx]
   top  = line[(left_top_delim_idx + 1)...colon_idx]
 
@@ -57,7 +103,7 @@ def get_dims(line)
   width  = line[(colon_idx+2)...width_height_delim_idx]
   height = line[(width_height_delim_idx + 1)..-1]
 
-  [left, top, width, height].map(&:to_i)
+  [id, left, top, width, height].map(&:to_i)
 end
 
 def resize_matrix(matrix, x_start, y_start, width, height)
@@ -99,4 +145,6 @@ def add_cols(matrix, num_cols_to_add=1)
 end
 
 file = File.readlines("./input.txt")
-p solution_2(file)
+p solution(file, matrix_contructor=method(:create_square_matrix_of_empty_arrays),
+    index_strategy=method(:track_claim_ids_by_coord),
+    output_counter=method(:count_num_ids_with_no_overlap))
